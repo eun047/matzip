@@ -1,11 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
 export default function Sidebar({ map }) {
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState([]);
+  const [savedPlaces, setSavedPlaces] = useState([]);
+
+  // 저장된 맛집 불러오기
+  useEffect(() => {
+    if (!map) return;
+    loadSavedPlaces();
+  }, [map]);
+
+  const loadSavedPlaces = async () => {
+    const { data, error } = await supabase
+      .from("places")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (data) {
+      setSavedPlaces(data);
+      // 지도에 마커 표시
+      data.forEach((place) => {
+        const marker = new window.kakao.maps.Marker({
+          position: new window.kakao.maps.LatLng(place.lat, place.lng),
+          map: map,
+        });
+
+        const infowindow = new window.kakao.maps.InfoWindow({
+          content: `<div style="padding:5px">${place.name}</div>`,
+        });
+
+        window.kakao.maps.event.addListener(marker, "click", () => {
+          infowindow.open(map, marker);
+        });
+      });
+    }
+  };
 
   const searchPlaces = () => {
     if (!keyword) return;
@@ -37,6 +70,26 @@ export default function Sidebar({ map }) {
     } else {
       alert(`${place.place_name} 저장 완료!`);
     }
+  };
+
+  const showMarker = (place) => {
+    if (!map) return;
+
+    const marker = new window.kakao.maps.Marker({
+      position: new window.kakao.maps.LatLng(place.y, place.x),
+      map: map,
+    });
+
+    const infowindow = new window.kakao.maps.InfoWindow({
+      content: `<div style="padding:5px">${place.place_name}</div>`,
+    });
+
+    window.kakao.maps.event.addListener(marker, "click", () => {
+      infowindow.open(map, marker);
+    });
+
+    // 마커 위치로 지도 이동
+    map.panTo(new window.kakao.maps.LatLng(place.y, place.x));
   };
 
   return (
@@ -74,6 +127,7 @@ export default function Sidebar({ map }) {
             {place.address_name}
           </p>
           <button onClick={() => savePlace(place)}>저장</button>
+          <button onClick={() => showMarker(place)}>지도보기</button>
         </div>
       ))}
     </div>
