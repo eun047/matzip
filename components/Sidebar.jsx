@@ -117,6 +117,7 @@ export default function Sidebar({ map }) {
         검색
       </button>
 
+      {/* 검색 결과 */}
       {results.map((place) => (
         <div
           key={place.id}
@@ -128,6 +129,19 @@ export default function Sidebar({ map }) {
           </p>
           <button onClick={() => savePlace(place)}>저장</button>
           <button onClick={() => showMarker(place)}>지도보기</button>
+        </div>
+      ))}
+
+      {/* 저장된 맛집 목록 */}
+      <h3 style={{ marginTop: "24px" }}>⭐ 저장된 맛집</h3>
+      {savedPlaces.map((place) => (
+        <div
+          key={place.id}
+          style={{ padding: "8px", borderBottom: "1px solid #eee" }}
+        >
+          <p style={{ fontWeight: "bold" }}>{place.name}</p>
+          <p style={{ fontSize: "12px", color: "gray" }}>{place.address}</p>
+          <p style={{ fontSize: "12px", color: "blue" }}>{place.category}</p>
         </div>
       ))}
     </div>
