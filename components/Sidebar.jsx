@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import SaveModal from "./SaveModal";
 import EditModal from "./EditModal";
+import UserProfileModal from "./UserProfileModal";
 
 const getMarkerImageUrl = (color) => {
   const colorMap = {
@@ -33,6 +34,7 @@ export default function Sidebar({ map }) {
   const [activeTab, setActiveTab] = useState("map");
   const [editModal, setEditModal] = useState(null);
   const markersRef = useRef([]);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     if (!map) return;
@@ -183,12 +185,20 @@ export default function Sidebar({ map }) {
     if (!keyword || !map) return;
     const ps = new window.kakao.maps.services.Places();
     ps.keywordSearch(keyword, (data, status) => {
-      if (status === window.kakao.maps.services.Status.OK) setResults(data);
+      if (status === window.kakao.maps.services.Status.OK) {
+        setResults(data);
+        setActiveTab("map");
+      }
     });
   };
 
+  const searchMarkersRef = useRef([]);
   const showSearchMarker = (place) => {
     if (!map) return;
+    // 기존 검색 마커 제거
+    searchMarkersRef.current.forEach((m) => m.setMap(null));
+    searchMarkersRef.current = [];
+
     const marker = new window.kakao.maps.Marker({
       position: new window.kakao.maps.LatLng(place.y, place.x),
       map: map,
@@ -200,6 +210,7 @@ export default function Sidebar({ map }) {
       infowindow.open(map, marker),
     );
     map.panTo(new window.kakao.maps.LatLng(place.y, place.x));
+    searchMarkersRef.current.push(marker);
   };
 
   const unlistedPlaces = savedPlaces.filter(
@@ -223,7 +234,15 @@ export default function Sidebar({ map }) {
           borderBottom: "1px solid var(--border)",
         }}
       >
-        <div style={{ marginBottom: "16px" }}>
+        {/* 헤더 */}
+        <div
+          style={{
+            marginBottom: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
           <span
             style={{
               fontWeight: "700",
@@ -233,6 +252,35 @@ export default function Sidebar({ map }) {
           >
             matzip
           </span>
+          <div
+            onClick={() => setShowProfile(true)}
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              background: "transparent",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#F7F8FA")}
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "transparent")
+            }
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#8E8E9A"
+              strokeWidth="2"
+            >
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+            </svg>
+          </div>
         </div>
 
         {/* 검색창 */}
@@ -669,9 +717,10 @@ export default function Sidebar({ map }) {
           place={selectedPlace}
           onClose={() => setSelectedPlace(null)}
           onSaved={() => {
+            searchMarkersRef.current.forEach((m) => m.setMap(null));
+            searchMarkersRef.current = [];
             loadSavedPlaces();
             loadLists();
-            setSelectedPlace(null);
           }}
         />
       )}
@@ -684,6 +733,11 @@ export default function Sidebar({ map }) {
           onClose={() => setEditModal(null)}
           onSave={handleEditSave}
         />
+      )}
+
+      {/* 프로필 모달 */}
+      {showProfile && (
+        <UserProfileModal onClose={() => setShowProfile(false)} />
       )}
     </div>
   );
