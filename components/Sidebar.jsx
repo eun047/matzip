@@ -59,14 +59,33 @@ export default function Sidebar({ map }) {
     if (data) setLists(data);
   };
 
-  const showMarkers = (places) => {
+  const showMarkers = (places, highlightId = null) => {
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
     const newMarkers = places.map((place) => {
-      const markerImage = new window.kakao.maps.MarkerImage(
-        getMarkerImageUrl(place.marker_color || "red"),
-        new window.kakao.maps.Size(30, 40),
-      );
+      let markerImage;
+
+      if (highlightId && place.id === highlightId) {
+        markerImage = new window.kakao.maps.MarkerImage(
+          getMarkerImageUrl(place.marker_color || "red"),
+          new window.kakao.maps.Size(30, 40),
+        );
+      } else {
+        const colorMap = {
+          red: "#FF5B35",
+          yellow: "#FFC107",
+          blue: "#2196F3",
+          green: "#4CAF50",
+          purple: "#9C27B0",
+        };
+        const hex = colorMap[place.marker_color] || colorMap.red;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="${hex}" stroke="white" stroke-width="2"/></svg>`;
+        markerImage = new window.kakao.maps.MarkerImage(
+          `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+          new window.kakao.maps.Size(20, 20),
+        );
+      }
+
       const marker = new window.kakao.maps.Marker({
         position: new window.kakao.maps.LatLng(place.lat, place.lng),
         map: map,
@@ -100,11 +119,12 @@ export default function Sidebar({ map }) {
     map.panTo(new window.kakao.maps.LatLng(place.lat, place.lng));
     const parentList = lists.find((l) => l.place_ids?.includes(place.id));
     if (parentList) {
-      showMarkers(
-        savedPlaces.filter((p) => parentList.place_ids?.includes(p.id)),
+      const folderPlaces = savedPlaces.filter((p) =>
+        parentList.place_ids?.includes(p.id),
       );
+      showMarkers(folderPlaces, place.id);
     } else {
-      showMarkers([place]);
+      showMarkers([place], place.id);
     }
   };
 
@@ -257,8 +277,39 @@ export default function Sidebar({ map }) {
           }}
         >
           {[
-            { id: "map", label: "지도 보기", icon: "📍" },
-            { id: "saved", label: "저장한 맛집", icon: "❤️" },
+            {
+              id: "map",
+              label: "지도 보기",
+              icon: (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                  <circle cx="12" cy="9" r="2.5" />
+                </svg>
+              ),
+            },
+            {
+              id: "saved",
+              label: "저장한 맛집",
+              icon: (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                </svg>
+              ),
+            },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -280,7 +331,16 @@ export default function Sidebar({ map }) {
               <div
                 style={{ display: "flex", alignItems: "center", gap: "10px" }}
               >
-                <span style={{ fontSize: "18px" }}>{tab.icon}</span>
+                <span
+                  style={{
+                    color:
+                      activeTab === tab.id
+                        ? "var(--primary)"
+                        : "var(--text-secondary)",
+                  }}
+                >
+                  {tab.icon}
+                </span>
                 <span
                   style={{
                     fontSize: "15px",
@@ -489,7 +549,6 @@ export default function Sidebar({ map }) {
                       alignItems: "center",
                     }}
                   >
-                    {/* 이름 수정 버튼 */}
                     <div
                       onClick={(e) => {
                         e.stopPropagation();
@@ -524,7 +583,6 @@ export default function Sidebar({ map }) {
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                       </svg>
                     </div>
-                    {/* 삭제 버튼 */}
                     <div
                       onClick={(e) => {
                         e.stopPropagation();
