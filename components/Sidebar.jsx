@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import SaveModal from "./SaveModal";
 import EditModal from "./EditModal";
 import UserProfileModal from "./UserProfileModal";
+import { getRecommendations } from "../lib/recommend";
 
 const getMarkerImageUrl = (color) => {
   const colorMap = {
@@ -33,8 +34,11 @@ export default function Sidebar({ map }) {
   const [openFolder, setOpenFolder] = useState(null);
   const [activeTab, setActiveTab] = useState("map");
   const [editModal, setEditModal] = useState(null);
-  const markersRef = useRef([]);
   const [showProfile, setShowProfile] = useState(false);
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRec, setLoadingRec] = useState(false);
+  const markersRef = useRef([]);
+  const searchMarkersRef = useRef([]);
 
   useEffect(() => {
     if (!map) return;
@@ -50,6 +54,14 @@ export default function Sidebar({ map }) {
     if (data) {
       setSavedPlaces(data);
       showMarkers(data);
+      const { data: profile } = await supabase
+        .from("user_profile")
+        .select("*")
+        .single();
+      setLoadingRec(true);
+      const recs = await getRecommendations(data, profile, map);
+      setRecommendations(recs);
+      setLoadingRec(false);
     }
   };
 
@@ -66,7 +78,6 @@ export default function Sidebar({ map }) {
     markersRef.current = [];
     const newMarkers = places.map((place) => {
       let markerImage;
-
       if (highlightId && place.id === highlightId) {
         markerImage = new window.kakao.maps.MarkerImage(
           getMarkerImageUrl(place.marker_color || "red"),
@@ -87,7 +98,6 @@ export default function Sidebar({ map }) {
           new window.kakao.maps.Size(20, 20),
         );
       }
-
       const marker = new window.kakao.maps.Marker({
         position: new window.kakao.maps.LatLng(place.lat, place.lng),
         map: map,
@@ -102,6 +112,24 @@ export default function Sidebar({ map }) {
       return marker;
     });
     markersRef.current = newMarkers;
+  };
+
+  const showSearchMarker = (place) => {
+    if (!map) return;
+    searchMarkersRef.current.forEach((m) => m.setMap(null));
+    searchMarkersRef.current = [];
+    const marker = new window.kakao.maps.Marker({
+      position: new window.kakao.maps.LatLng(place.y, place.x),
+      map: map,
+    });
+    const infowindow = new window.kakao.maps.InfoWindow({
+      content: `<div style="padding:6px 10px;font-size:13px">${place.place_name}</div>`,
+    });
+    window.kakao.maps.event.addListener(marker, "click", () =>
+      infowindow.open(map, marker),
+    );
+    map.panTo(new window.kakao.maps.LatLng(place.y, place.x));
+    searchMarkersRef.current.push(marker);
   };
 
   const handleFolderClick = (list) => {
@@ -192,27 +220,6 @@ export default function Sidebar({ map }) {
     });
   };
 
-  const searchMarkersRef = useRef([]);
-  const showSearchMarker = (place) => {
-    if (!map) return;
-    // 기존 검색 마커 제거
-    searchMarkersRef.current.forEach((m) => m.setMap(null));
-    searchMarkersRef.current = [];
-
-    const marker = new window.kakao.maps.Marker({
-      position: new window.kakao.maps.LatLng(place.y, place.x),
-      map: map,
-    });
-    const infowindow = new window.kakao.maps.InfoWindow({
-      content: `<div style="padding:6px 10px;font-size:13px">${place.place_name}</div>`,
-    });
-    window.kakao.maps.event.addListener(marker, "click", () =>
-      infowindow.open(map, marker),
-    );
-    map.panTo(new window.kakao.maps.LatLng(place.y, place.x));
-    searchMarkersRef.current.push(marker);
-  };
-
   const unlistedPlaces = savedPlaces.filter(
     (place) => !lists.some((list) => list.place_ids?.includes(place.id)),
   );
@@ -234,7 +241,6 @@ export default function Sidebar({ map }) {
           borderBottom: "1px solid var(--border)",
         }}
       >
-        {/* 헤더 */}
         <div
           style={{
             marginBottom: "16px",
@@ -377,7 +383,11 @@ export default function Sidebar({ map }) {
               }}
             >
               <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
               >
                 <span
                   style={{
@@ -423,7 +433,7 @@ export default function Sidebar({ map }) {
 
       {/* 콘텐츠 */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-        {/* 검색 결과 - 지도보기 탭에서만 */}
+        {/* 검색 결과 */}
         {activeTab === "map" && results.length > 0 && (
           <div style={{ marginBottom: "20px" }}>
             <p
@@ -496,21 +506,124 @@ export default function Sidebar({ map }) {
             >
               추천 맛집
             </p>
-            <div
-              style={{
-                background: "var(--bg)",
-                borderRadius: "12px",
-                padding: "24px",
-                textAlign: "center",
-              }}
-            >
-              <p style={{ fontSize: "24px", marginBottom: "8px" }}>✨</p>
-              <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                맛집을 저장하면
-                <br />
-                AI가 맞춤 추천을 해드려요!
-              </p>
-            </div>
+
+            {loadingRec && (
+              <div
+                style={{
+                  background: "var(--bg)",
+                  borderRadius: "12px",
+                  padding: "24px",
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  추천 맛집을 찾고 있어요...
+                </p>
+              </div>
+            )}
+
+            {!loadingRec && recommendations.length === 0 && (
+              <div
+                style={{
+                  background: "var(--bg)",
+                  borderRadius: "12px",
+                  padding: "24px",
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ fontSize: "24px", marginBottom: "8px" }}>✨</p>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  맛집을 저장하면
+                  <br />
+                  AI가 맞춤 추천을 해드려요!
+                </p>
+              </div>
+            )}
+
+            {!loadingRec &&
+              recommendations.map((place, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: "12px 14px",
+                    marginBottom: "8px",
+                    background: "var(--bg)",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        background: "var(--primary)",
+                        color: "white",
+                        borderRadius: "4px",
+                        padding: "1px 6px",
+                        fontSize: "10px",
+                        fontWeight: "600",
+                      }}
+                    >
+                      추천
+                    </span>
+                    <p style={{ fontWeight: "600", fontSize: "13px" }}>
+                      {place.place_name}
+                    </p>
+                  </div>
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-secondary)",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    {place.category_name}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-secondary)",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    {place.address_name}
+                  </p>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      onClick={() => {
+                        map.panTo(
+                          new window.kakao.maps.LatLng(place.y, place.x),
+                        );
+                        showSearchMarker(place);
+                      }}
+                      style={secondaryBtnStyle}
+                    >
+                      지도보기
+                    </button>
+                    <button
+                      onClick={() => setSelectedPlace(place)}
+                      style={primaryBtnStyle}
+                    >
+                      + 저장
+                    </button>
+                  </div>
+                </div>
+              ))}
           </div>
         )}
 
@@ -530,7 +643,6 @@ export default function Sidebar({ map }) {
               </p>
             )}
 
-            {/* 폴더에 없는 맛집 */}
             {unlistedPlaces.map((place) => (
               <PlaceItem
                 key={place.id}
@@ -541,7 +653,6 @@ export default function Sidebar({ map }) {
               />
             ))}
 
-            {/* 폴더 목록 */}
             {lists.map((list) => (
               <div key={list.id} style={{ marginBottom: "8px" }}>
                 <div
@@ -778,7 +889,13 @@ function PlaceItem({ place, onClick, onColorChange, onDelete }) {
         onClick={() => onClick(place)}
         style={{ flex: 1, cursor: "pointer" }}
       >
-        <p style={{ fontWeight: "600", fontSize: "13px", marginBottom: "2px" }}>
+        <p
+          style={{
+            fontWeight: "600",
+            fontSize: "13px",
+            marginBottom: "2px",
+          }}
+        >
           {place.name}
         </p>
         <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
