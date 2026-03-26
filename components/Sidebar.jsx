@@ -830,6 +830,8 @@ export default function Sidebar({ map }) {
           onSaved={() => {
             searchMarkersRef.current.forEach((m) => m.setMap(null));
             searchMarkersRef.current = [];
+            setResults([]);
+            setActiveTab("map");
             loadSavedPlaces();
             loadLists();
           }}
